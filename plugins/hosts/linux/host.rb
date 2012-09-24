@@ -35,60 +35,22 @@ module VagrantPlugins
       end
 
       def nfs_export(id, ip, folders)
-        output = TemplateRenderer.render('nfs/exports_linux',
-                                         :uuid => id,
-                                         :ip => ip,
-                                         :folders => folders)
-
         @ui.info I18n.t("vagrant.hosts.linux.nfs_export")
         sleep 0.5
 
-        nfs_cleanup(id)
-
-        output.split("\n").each do |line|
-          # This should only ask for administrative permission once, even
-          # though its executed in multiple subshells.
-          system(%Q[sudo su root -c "echo '#{line}' >> /etc/exports"])
+        # This should only ask for administrative permission once, even
+        # though its executed in multiple subshells.
+        folders.each do |name,opts|
+          @logger.debug("sudo exportfs #{ip}:#{opts[:hostpath]}")
+          system("sudo exportfs #{ip}:#{opts[:hostpath]}")
         end
-
-        # We run restart here instead of "update" just in case nfsd
-        # is not starting
-        system("sudo #{@nfs_server_binary} restart")
       end
 
       def nfs_prune(valid_ids)
-        return if !File.exist?("/etc/exports")
-
+        # Since we used exportfs above, all modifications are to etab and
+        # thus temporary.  Restarting nfsd flushes them.
         @logger.info("Pruning invalid NFS entries...")
-
-        output = false
-
-        File.read("/etc/exports").lines.each do |line|
-          if id = line[/^# VAGRANT-BEGIN: (.+?)$/, 1]
-            if valid_ids.include?(id)
-              @logger.debug("Valid ID: #{id}")
-            else
-              if !output
-                # We want to warn the user but we only want to output once
-                @ui.info I18n.t("vagrant.hosts.linux.nfs_prune")
-                output = true
-              end
-
-              @logger.info("Invalid ID, pruning: #{id}")
-              nfs_cleanup(id)
-            end
-          end
-        end
-      end
-
-      protected
-
-      def nfs_cleanup(id)
-        return if !File.exist?("/etc/exports")
-
-        # Use sed to just strip out the block of code which was inserted
-        # by Vagrant
-        system("sudo sed -e '/^# VAGRANT-BEGIN: #{id}/,/^# VAGRANT-END: #{id}/ d' -ibak /etc/exports")
+        system("sudo #{@nfs_server_binary} restart")
       end
     end
   end
