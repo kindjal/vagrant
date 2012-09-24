@@ -13,7 +13,6 @@ module Vagrant
   # access to the VMs, CLI, etc. all in the scope of this environment.
   class Environment
     HOME_SUBDIRS = ["tmp", "boxes", "gems"]
-    DEFAULT_VM = :default
     DEFAULT_HOME = "~/.vagrant.d"
     DEFAULT_RC = "~/.vagrantrc"
 
@@ -105,6 +104,14 @@ module Vagrant
       activate_plugins
     end
 
+    # Return a human-friendly string for pretty printed or inspected
+    # instances.
+    #
+    # @return [String]
+    def inspect
+      "#<#{self.class}: #{@cwd}>"
+    end
+
     #---------------------------------------------------------------
     # Helpers
     #---------------------------------------------------------------
@@ -122,7 +129,7 @@ module Vagrant
     #
     # @return [BoxCollection]
     def boxes
-      @_boxes ||= BoxCollection.new(boxes_path, action_runner)
+      @_boxes ||= BoxCollection.new(boxes_path)
     end
 
     # Returns the VMs associated with this environment.
@@ -163,7 +170,7 @@ module Vagrant
     #
     # @return [Bool]
     def multivm?
-      vms.length > 1 || vms.keys.first != DEFAULT_VM
+      vms.length > 1
     end
 
     # Makes a call to the CLI with the given arguments as if they
@@ -177,7 +184,7 @@ module Vagrant
 
     # Returns the host object associated with this environment.
     #
-    # @return [Hosts::Base]
+    # @return [Class]
     def host
       return @host if defined?(@host)
 
@@ -195,10 +202,9 @@ module Vagrant
         # Get the flattened list of available hosts
         host_klass = Hosts.detect(hosts)
       end
-      host_klass = Vagrant.hosts.get(host_klass) if host_klass.is_a?(Symbol)
 
       # If no host class is detected, we use the base class.
-      host_klass ||= Hosts::Base
+      host_klass ||= Vagrant.plugin("1", :host)
 
       @host ||= host_klass.new(@ui)
     end
@@ -207,7 +213,7 @@ module Vagrant
     #
     # @return [Action::Runner]
     def action_runner
-      @action_runner ||= Action::Runner.new(action_registry) do
+      @action_runner ||= Action::Runner.new do
         {
           :action_runner  => action_runner,
           :box_collection => boxes,
@@ -218,16 +224,6 @@ module Vagrant
           :ui             => @ui
         }
       end
-    end
-
-    # Action registry for registering new actions with this environment.
-    #
-    # @return [Registry]
-    def action_registry
-      # For now we return the global built-in actions registry. In the future
-      # we may want to create an isolated registry that inherits from this
-      # global one, but for now there isn't a use case that calls for it.
-      Vagrant.actions
     end
 
     # Loads on initial access and reads data from the global data store.
@@ -361,7 +357,7 @@ module Vagrant
     # to load the Vagrantfile into that context.
     def load_config!
       # Initialize the config loader
-      config_loader = Config::Loader.new
+      config_loader = Config::Loader.new(Config::VERSIONS, Config::VERSIONS_ORDER)
       config_loader.load_order = [:default, :box, :home, :root, :vm]
 
       inner_load = lambda do |*args|
@@ -395,7 +391,7 @@ module Vagrant
 
         if subvm
           # We have subvm configuration, so set that up as well.
-          config_loader.set(:vm, subvm.proc_stack)
+          config_loader.set(:vm, subvm.config_procs)
         end
 
         # We activate plugins here because the files which we're loading
@@ -418,13 +414,6 @@ module Vagrant
       defined_vm_keys = global.vm.defined_vm_keys.dup
       defined_vms     = global.vm.defined_vms.dup
 
-      # If this isn't a multi-VM environment, then setup the default VM
-      # to simply be our configuration.
-      if defined_vm_keys.empty?
-        defined_vm_keys << DEFAULT_VM
-        defined_vms[DEFAULT_VM] = VagrantPlugins::Kernel::VagrantConfigSubVM.new
-      end
-
       vm_configs = defined_vm_keys.map do |vm_name|
         @logger.debug("Loading configuration for VM: #{vm_name}")
 
@@ -434,11 +423,18 @@ module Vagrant
         config = inner_load[subvm]
 
         # Second pass, with the box
-        config = inner_load[subvm, boxes.find(config.vm.box)]
-        config.vm.name = vm_name
+        box = nil
 
-        # Return the final configuration for this VM
-        config
+        begin
+          box = boxes.find(config.vm.box, :virtualbox) if config.vm.box
+        rescue Errors::BoxUpgradeRequired
+          # Upgrade the box if we must.
+          @logger.info("Upgrading box during config load: #{config.vm.box}")
+          boxes.upgrade(config.vm.box)
+          retry
+        end
+
+        inner_load[subvm, box]
       end
 
       # Finally, we have our configuration. Set it and forget it.
@@ -447,11 +443,22 @@ module Vagrant
 
     # Loads the persisted VM (if it exists) for this environment.
     def load_vms!
-      result = {}
+      # This is hardcoded for now.
+      provider = nil
+      Vagrant.plugin("1").registered.each do |plugin|
+        provider = plugin.provider.get(:virtualbox)
+        break if provider
+      end
+
+      raise "VirtualBox provider not found." if !provider
 
       # Load all the virtual machine instances.
+      result = {}
       config.vms.each do |name|
-        result[name] = Vagrant::VM.new(name, self, config.for_vm(name))
+        vm_config = config.for_vm(name)
+        box       = boxes.find(vm_config.vm.box, :virtualbox)
+
+        result[name] = Vagrant::Machine.new(name, provider, vm_config, box, self)
       end
 
       result
@@ -535,7 +542,7 @@ module Vagrant
     def load_plugins
       # Add our private gem path to the gem path and reset the paths
       # that Rubygems knows about.
-      ENV["GEM_PATH"] = "#{@gems_path}:#{ENV["GEM_PATH"]}"
+      ENV["GEM_PATH"] = "#{@gems_path}#{::File::PATH_SEPARATOR}#{ENV["GEM_PATH"]}"
       ::Gem.clear_paths
 
       # Load the plugins

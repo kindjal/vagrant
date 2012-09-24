@@ -10,15 +10,13 @@ Vagrant is a tool for building and distributing virtualized development environm
 By providing automated creation and provisioning of virtual machines using [Oracle’s VirtualBox](http://www.virtualbox.org),
 Vagrant provides the tools to create and configure lightweight, reproducible, and portable
 virtual environments. For more information, see the part of the getting started guide
-on “[Why Vagrant?](http://vagrantup.com/docs/getting-started/why.html)”
+on “[Why Vagrant?](http://vagrantup.com/v1/docs/getting-started/why.html)”
 
 ## Quick Start
 
 First, make sure your development machine has [VirtualBox](http://www.virtualbox.org)
-installed. The setup from that point forward is very easy, since Vagrant is simply
-a rubygem.
-
-    gem install vagrant
+installed. After this, [download the appropriate Vagrant package for your OS](http://downloads.vagrantup.com) and install that. If you're not on Mac OS X or Windows, you'll need
+to add `/opt/vagrant/bin` to your `PATH`. After this, you're ready to go!
 
 To build your first virtual environment:
 
@@ -32,7 +30,7 @@ the box doesn't already exist on your system.
 ## Getting Started Guide
 
 To learn how to build a fully functional rails development environment, view the
-[getting started guide](http://vagrantup.com/docs/getting-started/index.html).
+[getting started guide](http://vagrantup.com/v1/docs/getting-started/index.html).
 
 ## Installing the Gem from Git
 

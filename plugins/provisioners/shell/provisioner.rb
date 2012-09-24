@@ -3,8 +3,8 @@ require "tempfile"
 
 module VagrantPlugins
   module Shell
-    class Provisioner < Vagrant::Provisioners::Base
-      class Config < Vagrant::Config::Base
+    class Provisioner < Vagrant.plugin("1", :provisioner)
+      class Config < Vagrant.plugin("1", :config)
         attr_accessor :inline
         attr_accessor :path
         attr_accessor :upload_path
@@ -76,18 +76,20 @@ module VagrantPlugins
         command = "chmod +x #{config.upload_path} && #{config.upload_path}#{args}"
 
         with_script_file do |path|
-          # Upload the script to the VM
-          env[:vm].channel.upload(path.to_s, config.upload_path)
+          # Upload the script to the machine
+          env[:machine].communicate.tap do |comm|
+            comm.upload(path.to_s, config.upload_path)
 
-          # Execute it with sudo
-          env[:vm].channel.sudo(command) do |type, data|
-            if [:stderr, :stdout].include?(type)
-              # Output the data with the proper color based on the stream.
-              color = type == :stdout ? :green : :red
+            # Execute it with sudo
+            comm.sudo(command) do |type, data|
+              if [:stderr, :stdout].include?(type)
+                # Output the data with the proper color based on the stream.
+                color = type == :stdout ? :green : :red
 
-              # Note: Be sure to chomp the data to avoid the newlines that the
-              # Chef outputs.
-              env[:ui].info(data.chomp, :color => color, :prefix => false)
+                # Note: Be sure to chomp the data to avoid the newlines that the
+                # Chef outputs.
+                env[:ui].info(data.chomp, :color => color, :prefix => false)
+              end
             end
           end
         end

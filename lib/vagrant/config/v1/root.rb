@@ -1,6 +1,6 @@
 module Vagrant
   module Config
-    class V1 < VersionBase
+    module V1
       # This is the root configuration class. An instance of this is what
       # is passed into version 1 Vagrant configuration blocks.
       class Root
@@ -27,6 +27,15 @@ module Vagrant
           else
             # Super it up to probably raise a NoMethodError
             super
+          end
+        end
+
+        # Called to finalize this object just prior to it being used by
+        # the Vagrant system. The "!" signifies that this is expected to
+        # mutate itself.
+        def finalize!
+          @keys.each do |_key, instance|
+            instance.finalize!
           end
         end
 

@@ -1,14 +1,14 @@
 ## 1.1.0 (unreleased)
 
+  - VirtualBox 4.2 support.
   - New plugin system which adds much more structure and stability to
     the overall API. The goal of this system is to make it easier to write
     powerful plugins for Vagrant while providing a backwards-compatible API
     so that plugins will always _load_ (though they will almost certainly
     not be _functional_ in future versions of Vagrant).
-  - Plugins no longer "autoload" by simply gem installing them. This increases
-    Vagrant's initial startup time considerably. To replace this, you must now
-    explicitly require plugins in the `~/.vagrantrc` file, using
-    `Vagrant.require_plugin`.
+  - Plugins installed as gems no longer "autoload". You must now explicitly
+    require plugins in the `~/.vagrantrc` file, using `Vagrant.require_plugin`.
+    This decreases Vagrant's initial startup time considerably.
   - Improve the SSH "ready?" check. [GH-841]
   - Human friendly error if connection times out for HTTP downloads. [GH-849]
   - Detect when the VirtualBox installation is incomplete and error. [GH-846]
@@ -26,6 +26,29 @@
     speeds on CentOS. [GH-922]
   - Fix typo in setting host name for Gentoo guests. [GH-931]
   - `config.ssh.shell` now includes the flags to pass to it, such as `-l` [GH-917]
+  - The check for whether a port is open or not is more complete. [GH-948]
+  - Files that are included with `vagrant package --include` now properly
+    preserve file attributes on earlier versions of Ruby. [GH-951]
+  - SSH uses LogLevel FATAL so that errors are still shown.
+  - Multiple interfaces now work with Arch linux guests. [GH-957]
+  - Fix issue where subprocess execution would always spin CPU of Ruby
+    process to 100%. [GH-832]
+  - Fix issue where shell provisioner would sometimes never end. [GH-968]
+  - FIx issue where puppet would reorder module paths. [GH-964]
+  - Human-friendly error is raised if there are permission issues when
+    using SCP to upload files. [GH-924]
+  - When console input is asked for (destroying a VM, bridged interfaces, etc.),
+    keystrokes such as ctrl-D and ctrl-C are more gracefully handled. [GH-1017]
+  - Fixed bug where port check would use "localhost" on systems where
+    "localhost" is not available. [GH-1057]
+  - Sending a SIGINT (Ctrl-C) very early on when executing `vagrant` no
+    longer results in an ugly stack trace.
+  - SSH retries in the face of a `EHOSTUNREACH` error, improving the robustness
+    that SSHing succeeds when booting a machine.
+  - Add missing translation for "saving" state on VirtualBox. [GH-1110]
+  - Proper error message if the remote end unexpectedly resets the connection
+    while downloading a box over HTTP. [GH-1090]
+  - Allow "file://" URLs for box URLs. [GH-1087]
 
 ## 1.0.3 (May 1, 2012)
 

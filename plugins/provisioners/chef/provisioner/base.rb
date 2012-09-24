@@ -1,12 +1,14 @@
 require 'tempfile'
 
+require "vagrant/util/template_renderer"
+
 module VagrantPlugins
   module Chef
     module Provisioner
       # This class is a base class where the common functionality shared between
       # chef-solo and chef-client provisioning are stored. This is **not an actual
       # provisioner**. Instead, {ChefSolo} or {ChefServer} should be used.
-      class Base < Vagrant::Provisioners::Base
+      class Base < Vagrant.plugin("1", :provisioner)
         include Vagrant::Util::Counter
 
         def initialize(env, config)
@@ -15,17 +17,13 @@ module VagrantPlugins
           config.provisioning_path ||= "/tmp/vagrant-chef-#{get_and_update_counter(:provisioning_path)}"
         end
 
-        def prepare
-          raise ChefError, :invalid_provisioner
-        end
-
         def verify_binary(binary)
           # Checks for the existence of chef binary and error if it
           # doesn't exist.
-          env[:vm].channel.sudo("which #{binary}",
-                                :error_class => ChefError,
-                                :error_key => :chef_not_detected,
-                                :binary => binary)
+          env[:machine].communicate.sudo("which #{binary}",
+                                         :error_class => ChefError,
+                                         :error_key => :chef_not_detected,
+                                         :binary => binary)
         end
 
         # Returns the path to the Chef binary, taking into account the
@@ -36,12 +34,14 @@ module VagrantPlugins
         end
 
         def chown_provisioning_folder
-          env[:vm].channel.sudo("mkdir -p #{config.provisioning_path}")
-          env[:vm].channel.sudo("chown #{env[:vm].config.ssh.username} #{config.provisioning_path}")
+          env[:machine].communicate.tap do |comm|
+            comm.sudo("mkdir -p #{config.provisioning_path}")
+            comm.sudo("chown #{env[:machine].config.ssh.username} #{config.provisioning_path}")
+          end
         end
 
         def setup_config(template, filename, template_vars)
-          config_file = TemplateRenderer.render(template, {
+          config_file = Vagrant::Util::TemplateRenderer.render(template, {
             :log_level => config.log_level.to_sym,
             :http_proxy => config.http_proxy,
             :http_proxy_user => config.http_proxy_user,
@@ -59,8 +59,10 @@ module VagrantPlugins
           temp.close
 
           remote_file = File.join(config.provisioning_path, filename)
-          env[:vm].channel.sudo("rm #{remote_file}", :error_check => false)
-          env[:vm].channel.upload(temp.path, remote_file)
+          env[:machine].communicate.tap do |comm|
+            comm.sudo("rm #{remote_file}", :error_check => false)
+            comm.upload(temp.path, remote_file)
+          end
         end
 
         def setup_json
@@ -75,7 +77,7 @@ module VagrantPlugins
           temp.write(json)
           temp.close
 
-          env[:vm].channel.upload(temp.path, File.join(config.provisioning_path, "dna.json"))
+          env[:machine].communicate.upload(temp.path, File.join(config.provisioning_path, "dna.json"))
         end
 
         class ChefError < Vagrant::Errors::VagrantError
@@ -83,7 +85,7 @@ module VagrantPlugins
         end
 
          # This is the configuration which is available through `config.chef`
-        class Config < Vagrant::Config::Base
+        class Config < Vagrant.plugin("1", :config)
           # Shared config
           attr_accessor :node_name
           attr_accessor :provisioning_path

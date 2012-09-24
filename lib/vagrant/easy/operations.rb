@@ -44,9 +44,26 @@ module Vagrant
       # runtimes such as CRuby and JRuby.
       #
       # @param [String] command Command to run
-      def local(command)
+      # @param [Hash] options Additional options
+      def local(command, options=nil)
         @logger.info("local: #{command}")
-        Vagrant::Util::Subprocess.execute(command)
+
+        block   = nil
+        options = { :echo => true }.merge(options || {})
+
+        if options[:echo]
+          # If we're echoing data, then setup the block that sends the
+          # data to the UI.
+          block = Proc.new do |type, data|
+            if type == :stdout || type == :stderr
+              @vm.ui.info(data.to_s,
+                          :prefix => false,
+                          :new_line => false)
+            end
+          end
+        end
+
+        Vagrant::Util::Subprocess.execute(command, :notify => [:stdout, :stderr], &block)
       end
 
       # Run a shell command within the VM. The command will run within a
@@ -58,18 +75,22 @@ module Vagrant
       #     puts "Output was #{output.stdout}"
       #
       # @param [String] command Command to run
-      def run(command)
+      # @param [Hash] options Additional options
+      def run(command, options=nil)
         @logger.info("run: #{command}")
-        remote_command(:execute, command)
+        options = { :echo => true }.merge(options || {})
+        remote_command(:execute, command, options)
       end
 
       # Same as {run} except runs the command with superuser privileges
       # via `sudo`.
       #
       # @param [String] command Command
-      def sudo(command)
+      # @param [Hash] options Additional options
+      def sudo(command, options=nil)
         @logger.info("sudo: #{command}")
-        remote_command(:sudo, command)
+        options = { :echo => true }.merge(options || {})
+        remote_command(:sudo, command, options)
       end
 
       # Uploads a file to the virtual machine.
@@ -105,7 +126,7 @@ module Vagrant
       protected
 
       # Runs a command on the remote host.
-      def remote_command(type, command)
+      def remote_command(type, command, options)
         # If the VM is not running, then we can't run SSH commands...
         raise Errors::VMNotRunningError if @vm.state != :running
 
@@ -119,6 +140,13 @@ module Vagrant
             result.stdout += data
           elsif type == :stderr
             result.stderr += data
+          end
+
+          # If we're echoing data, then echo it!
+          if options[:echo]
+            @vm.ui.info(data.to_s,
+                        :prefix => false,
+                        :new_line => false)
           end
         end
 

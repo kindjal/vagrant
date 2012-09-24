@@ -10,7 +10,7 @@ module Vagrant
     class HTTP < Base
       def self.match?(uri)
         # URI.parse barfs on '<drive letter>:\\files \on\ windows'
-        extracted = URI.extract(uri).first
+        extracted = URI.extract(uri, ['http', 'https']).first
         extracted && extracted.include?(uri)
       end
 
@@ -19,6 +19,7 @@ module Vagrant
         proxy_uri = resolve_proxy(uri)
 
         http = Net::HTTP.new(uri.host, uri.port, proxy_uri.host, proxy_uri.port, proxy_uri.user, proxy_uri.password)
+        http.read_timeout = nil # Disable the read timeout, just let it try to download
 
         if uri.scheme == "https"
           http.use_ssl = true
@@ -68,6 +69,8 @@ module Vagrant
             @ui.clear_line
           end
         end
+      rescue Errno::ECONNRESET
+        raise Errors::DownloaderHTTPConnectReset
       rescue Errno::ETIMEDOUT
         raise Errors::DownloaderHTTPConnectTimeout
       rescue SocketError

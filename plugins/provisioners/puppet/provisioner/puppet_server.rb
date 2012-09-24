@@ -5,8 +5,8 @@ module VagrantPlugins
         error_namespace("vagrant.provisioners.puppet_server")
       end
 
-      class PuppetServer < Base
-        class Config < Vagrant::Config::Base
+      class PuppetServer < Vagrant.plugin("1", :provisioner)
+        class Config < Vagrant.plugin("1", :config)
           attr_accessor :puppet_server
           attr_accessor :puppet_node
           attr_accessor :options
@@ -22,8 +22,8 @@ module VagrantPlugins
         end
 
         def provision!
-          verify_binary("puppetd")
-          run_puppetd_client
+          verify_binary("puppet")
+          run_puppet_agent
         end
 
         def verify_binary(binary)
@@ -33,7 +33,7 @@ module VagrantPlugins
                                 :binary => binary)
         end
 
-        def run_puppetd_client
+        def run_puppet_agent
           options = config.options
           options = [options] if !options.is_a?(Array)
 
@@ -67,7 +67,7 @@ module VagrantPlugins
             facter = "#{facts.join(" ")} "
           end
 
-          command = "#{facter}puppetd #{options} --server #{config.puppet_server}"
+          command = "#{facter}puppet agent #{options} --server #{config.puppet_server}"
 
           env[:ui].info I18n.t("vagrant.provisioners.puppet_server.running_puppetd")
           env[:vm].channel.sudo(command) do |type, data|
